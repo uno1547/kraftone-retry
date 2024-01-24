@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <!-- jquery for ajax -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <!-- botstrap css -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <!-- bootstrap js -->
+  <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  <style>
+    /* common */
+    p {
+      margin: 0;
+    }
+
+    #head {
+      background-color: yellow;
+      padding: 10px;
+    }
+    .inner {
+      width: 460px;
+      margin: auto;
+      text-align: center;
+    }
+    #buttons {
+      text-align: center; /*btn-group이 display flex 여서 text-align:center로 가운데정렬이된듯*/
+      margin-top: 10px;
+    }
+    .right {
+      text-align: right;
+      margin-top: 10px;
+    }
+    #movies {
+      margin-top: 20px;
+    }
+    .movie {
+      margin: auto;
+      margin-bottom: 20px;
+      border: 1px solid black;
+    }
+    .movie .content {
+      margin-top: 20px;
+    }
+    .movie img {
+      width: 70px;
+      height: 60px;
+    }
+    .movie-btn button {
+      width: 230px;
+    }
+  </style>
+  <script>
+    const Sort = {
+      BY_LIKES : "likes",
+      BY_VIEWERS : "aud-num",
+      BY_DATE : "date"
+    }
+    let sortMode = Sort.BY_LIKES
+    let trashMode = false
+
+    $(document).ready(function() {
+      showMovie()
+      displaySorter(sortMode)
+      displayTrashMode(trashMode)
+    })
+
+    function showMovie() {
+      $('#movies').empty() //새로고침
+      if (trashMode == false) { //일반모드
+        $.ajax({
+          type : "GET",
+          url : "/getdata",
+          data : {'sortMode' : sortMode},
+          success : function(response) {
+            if (response['result'] != 'success') {
+              alert(sortMode + '순으로 받아오기 실패')
+              return 
+            }
+            let movies = response['movies_lists'] //받은 리스트
+            addMovieCards(movies, false) 
+          }
+        })
+      } else { //휴지통모드일때 (trashMode == true)
+        $.ajax({
+          type: "GET",
+          url : "/gettrashdata",
+          data : {'sortMode' : sortMode},
+          success : function(response) {
+            if (response['result'] != 'success') {
+              alert('쓰레기통불러오기실패')
+              return
+            }
+            let trashedMovies = response['trashed_lists']
+            addMovieCards(trashedMovies, true)
+          }
+        })
+      }
+    }
+
+    function addMovieCards(movies, trashMode) {
+      for (let i = 0; i < movies.length; i++) {
+        let movie = movies[i]
+        let id = movie['_id'] //이 id를 4개의버튼의 onclick핸들러 인수로 넘김 > 해당 id값 데이터 수정
+        let imgUrl = movie['img-url']
+        let infoUrl = movie['link-url']
+        let title = movie['title']
+        let likes = movie['likes']
+        let audNum = movie['aud-num']
+        let date = `${movie['open-year']}.${movie['open-month']}.${movie['open-day']}`
+        let movieContentHtml = `
+        <div class="content">
+          <img src= '${imgUrl}' alt="">
+          <a href='${infoUrl}'>${title}</a>
+          <p><span>좋아요 : ${likes} 개</span></p>
+          <p><span>누적 관객수 : ${audNum} 명</span></p>
+          <p><span>개봉일 : ${date}</span></p>   
+        </div>
+        `
+        let movieBtnHtml = ''
+        if (trashMode == false) { //일반모드일때 버튼
+          movieBtnHtml = `
+          <div class="movie-btn">
+            <div class="btn-group" role="group" aria-label="Basic example">
+              <button type="button" class="btn btn-secondary" onclick = "likeMovie('${id}')">좋아요</button>
+              <button type="button" class="btn btn-secondary" onclick = "trashMovie('${id}')">휴지통으로</button>
+            </div>
+          </div>
+          `
+        } else { //휴지통모드일때 버튼
+          movieBtnHtml = `
+          <div class="movie-btn">
+            <div class="btn-group" role="group" aria-label="Basic example">
+              <button type="button" class="btn btn-secondary" onclick = "restoreMovie('${id}')">복구하기</button>
+              <button type="button" class="btn btn-secondary" onclick = "deleteMovie('${id}')">영구삭제</button>
+            </div>
+          </div>
+          `
+        }
+        $('#movies').append(`
+        <div class="movie">
+          ${movieContentHtml}
+          ${movieBtnHtml}
+          </div>
+        `
+        )
+      }
+    }
+      
+    function likeMovie(id) {
+      $.ajax({
+        type : "POST",
+        url : "/like",
+        data : {'id' : id},
+        success : function (response) {
+          if (response['result'] == 'success') {
+            alert('좋아요 완료!')
+            showMovie()
+          } else {
+            alert('좋아요 실패!')
+          }
+        }
+      })
+    }
+
+    function trashMovie(id) {
+      $.ajax({
+        type : "POST",
+        url : '/trash',
+        data : {'id' : id},
+        success : function (response) {
+          if (response['result'] == 'success') {
+            alert('버리기 완료!')
+            showMovie() //아마 showmovie에서 trash를 거르고 출력하기 때문에 새로고침 후 사라져 있을것임
+          } else {
+            alert('버리기 실패!')
+          }
+        }
+      })
+    }
+      
+    function restoreMovie(id) {
+      $.ajax({
+        type : "POST",
+        url : '/restore',
+        data : {'id' : id},
+        success : function (response) {
+          if (response['result'] == 'success') {
+            alert('복구 완료!')
+            showMovie()
+          } else {
+            alert('복구 실패')
+          }
+        }
+      })
+    }
+      
+    function deleteMovie(id) {
+      $.ajax({
+        type : "POST",
+        url : '/delete',
+        data : {'id' : id},
+        success : function (response) {
+          if (response['result'] == 'success') {
+            alert('영구삭제완료!')
+            showMovie()
+          } else {
+            alert('영구삭제실패')
+          }
+        }
+      })
+    }
+      
+    function toggle() {
+      if (trashMode) {
+        trashMode = false
+      } else {
+        trashMode = true
+      }
+      showMovie()
+      displayTrashMode(trashMode)
+    }
+      
+    function changeSorter(newMode) {
+      if (sortMode == newMode) {
+        return
+      }
+      sortMode = newMode
+      displaySorter(sortMode)
+      showMovie()
+    }
+
+    function displaySorter(mode) {
+      if (mode == 'likes') {
+        $('#sorter-likes').addClass("active")
+        $('#sorter-audnum').removeClass("active")
+        $('#sorter-date').removeClass("active")
+      } else if (mode == 'aud-num') {
+        $('#sorter-audnum').addClass("active")
+        $('#sorter-likes').removeClass("active")
+        $('#sorter-date').removeClass("active")
+      } else {
+        $('#sorter-date').addClass("active") 
+        $('#sorter-likes').removeClass("active")
+        $('#sorter-audnum').removeClass("active")
+      }
+    }
+      
+    function displayTrashMode(trashMode) {
+      if (trashMode == false) { 
+        $('#trash-mode-btn').text('휴지통보기')
+        trashMode = true
+      } else {
+        $('#trash-mode-btn').text('휴지통나가기')
+        trashMode = false
+      }
+    }
+      </script>
+</head>
+<body>
+  <div id = "head">
+    <div class = "inner">
+      <h1>마이 페이보릿 무비</h1>
+      <h4>순위를 매겨봅시다</h4>
+    </div>
+  </div>
+  <div class = "inner">
+    <div id = "buttons">
+      <div class = "btn-group" role = "group" aria-label = "Basic example">
+        <button type = "button" class = "btn btn-primary" id = "sorter-likes" onclick = "changeSorter('likes')">좋아요 순으로 정렬</button>
+        <button type = "button" class = "btn btn-primary" id = "sorter-audnum" onclick = "changeSorter('aud-num')">누적관객수 순으로 정렬</button>
+        <button type = "button" class = "btn btn-primary" id = "sorter-date" onclick = "changeSorter('date')">개봉일 순으로 정렬</button>
+      </div>
+      <div class = "right">
+        <button id = "trash-mode-btn" onclick = "toggle()"></button>
+      </div>
+    </div>
+    <div id = "movies">
+      <!-- <div class = "movie">
+        <div class = "content">
+          <img src = "" alt="">
+          <a href = "">킹스맨</a>
+          <p><span>좋아요 : 20</span></p>
+          <p><span>50명</span></p>
+          <p><span>2022.03.14</span></p>   
+        </div>
+        <div class = "movie-btn">
+          <div class = "btn-group" role = "group" aria-label = "Basic example">
+            <button type = "button" class = "btn btn-secondary">좋아요</button>
+            <button type = "button" class = "btn btn-secondary">휴지통으로</button>
+          </div>
+        </div>
+      </div> -->
+    </div>
+  </div>
+  
+
+</body>
+</html>
